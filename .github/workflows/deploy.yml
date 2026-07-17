@@ -18,6 +18,13 @@ jobs:
         with:
           php-version: '8.3'
 
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
       - name: Install Composer Dependencies
         run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
@@ -25,34 +32,78 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: 'npm'
 
       - name: Install NPM and Build React
         run: |
           npm ci
           npm run build
 
-      - name: Deploy via LFTP (Stable)
+      - name: Prepare deployment archive
+        run: |
+          # Generate one-time random deploy token
+          DEPLOY_TOKEN=$(openssl rand -hex 32)
+          echo "$DEPLOY_TOKEN" > .deploy_token
+          echo "DEPLOY_TOKEN=$DEPLOY_TOKEN" >> $GITHUB_ENV
+
+          # Create single ZIP archive (includes vendor/ for Laravel to work)
+          zip -qr /tmp/deploy.zip . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "node_modules/*" \
+            -x "tests/*" \
+            -x ".env" \
+            -x ".env.example" \
+            -x ".deploy_token" \
+            -x "storage/logs/*" \
+            -x "storage/framework/cache/data/*" \
+            -x "storage/framework/sessions/*" \
+            -x "storage/framework/views/*" \
+            -x "phpunit.xml" \
+            -x "vite.config.js" \
+            -x "tailwind.config.js" \
+            -x "postcss.config.js" \
+            -x "package.json" \
+            -x "package-lock.json" \
+            -x ".editorconfig" \
+            -x ".gitattributes" \
+            -x ".gitignore" \
+            -x ".npmrc" \
+            -x "README.md"
+
+          echo "✅ Archive size: $(du -sh /tmp/deploy.zip | cut -f1)"
+
+      - name: Upload archive via FTP
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq lftp > /dev/null 2>&1
+          echo "📤 Uploading deploy.zip + extractor script..."
           lftp -c "
             open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} ${{ secrets.FTP_SERVER }};
             set ftp:ssl-allow yes;
             set ftp:ssl-force no;
             set ssl:verify-certificate no;
             set ftp:passive-mode yes;
-            set net:timeout 60;
-            mirror -R \
-              -x ^vendor/ \
-              -x ^node_modules/ \
-              -x ^\.git/ \
-              -x ^\.github/ \
-              -x ^\.env$ \
-              -x ^\.env\.example$ \
-              -x ^tests/ \
-              -x ^storage/logs/ \
-              -x ^storage/framework/cache/ \
-              -x ^storage/framework/sessions/ \
-              -x ^storage/framework/views/ \
-              --only-newer --no-perms --verbose . public_html/seo/;
+            set net:timeout 120;
+            set net:max-retries 3;
+            mkdir -pf public_html/seo/public;
+            put public/_deploy.php -o public_html/seo/public/_deploy.php;
+            put .deploy_token -o public_html/seo/.deploy_token;
+            put /tmp/deploy.zip -o public_html/seo/deploy.zip;
             bye
           "
+          echo "✅ Upload complete"
+
+      - name: Extract archive on server
+        run: |
+          echo "📦 Triggering extraction on server..."
+          RESPONSE=$(curl -sS -f -X POST \
+            "https://seo.matiklaundry.site/_deploy.php" \
+            -d "token=${{ env.DEPLOY_TOKEN }}" \
+            --max-time 120 2>&1) || {
+            echo "⚠️ HTTPS failed, trying HTTP..."
+            RESPONSE=$(curl -sS -f -X POST \
+              "http://seo.matiklaundry.site/_deploy.php" \
+              -d "token=${{ env.DEPLOY_TOKEN }}" \
+              --max-time 120 2>&1)
+          }
+          echo "✅ Server response: $RESPONSE"
