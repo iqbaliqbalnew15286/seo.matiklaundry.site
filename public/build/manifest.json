@@ -1,0 +1,104 @@
+{
+  "_AdminLayout-Cbc8kqIS.js": {
+    "file": "assets/AdminLayout-Cbc8kqIS.js",
+    "name": "AdminLayout",
+    "imports": [
+      "_rolldown-runtime-Bh1tDfsg.js",
+      "resources/js/app.jsx"
+    ]
+  },
+  "_rolldown-runtime-Bh1tDfsg.js": {
+    "file": "assets/rolldown-runtime-Bh1tDfsg.js",
+    "name": "rolldown-runtime"
+  },
+  "_typeof-B5XbjTb1.js": {
+    "file": "assets/typeof-B5XbjTb1.js",
+    "name": "typeof"
+  },
+  "node_modules/canvg/lib/index.es.js": {
+    "file": "assets/index.es-CxFH6l7C.js",
+    "name": "index.es",
+    "src": "node_modules/canvg/lib/index.es.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "_rolldown-runtime-Bh1tDfsg.js",
+      "_typeof-B5XbjTb1.js"
+    ]
+  },
+  "node_modules/dompurify/dist/purify.es.mjs": {
+    "file": "assets/purify.es-DuRL7t6i.js",
+    "name": "purify.es",
+    "src": "node_modules/dompurify/dist/purify.es.mjs",
+    "isDynamicEntry": true
+  },
+  "node_modules/html2canvas/dist/html2canvas.js": {
+    "file": "assets/html2canvas-CRV6Yc1K.js",
+    "name": "html2canvas",
+    "src": "node_modules/html2canvas/dist/html2canvas.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "_rolldown-runtime-Bh1tDfsg.js"
+    ]
+  },
+  "resources/css/app.css": {
+    "file": "assets/app-bNLuPC8q.css",
+    "name": "app",
+    "names": [
+      "app.css"
+    ],
+    "src": "resources/css/app.css",
+    "isEntry": true
+  },
+  "resources/js/app.jsx": {
+    "file": "assets/app-B7gY6NGl.js",
+    "name": "app",
+    "src": "resources/js/app.jsx",
+    "isEntry": true,
+    "imports": [
+      "_rolldown-runtime-Bh1tDfsg.js"
+    ],
+    "dynamicImports": [
+      "resources/js/pages/Dashboard.jsx",
+      "resources/js/pages/auth/Login.jsx",
+      "resources/js/pages/competitor/Analysis.jsx"
+    ]
+  },
+  "resources/js/pages/Dashboard.jsx": {
+    "file": "assets/Dashboard-BvrgO4CA.js",
+    "name": "Dashboard",
+    "src": "resources/js/pages/Dashboard.jsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "_rolldown-runtime-Bh1tDfsg.js",
+      "resources/js/app.jsx",
+      "_AdminLayout-Cbc8kqIS.js"
+    ]
+  },
+  "resources/js/pages/auth/Login.jsx": {
+    "file": "assets/Login-xMN4otwV.js",
+    "name": "Login",
+    "src": "resources/js/pages/auth/Login.jsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "_rolldown-runtime-Bh1tDfsg.js",
+      "resources/js/app.jsx"
+    ]
+  },
+  "resources/js/pages/competitor/Analysis.jsx": {
+    "file": "assets/Analysis-BBV7pyaW.js",
+    "name": "Analysis",
+    "src": "resources/js/pages/competitor/Analysis.jsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "_rolldown-runtime-Bh1tDfsg.js",
+      "resources/js/app.jsx",
+      "_typeof-B5XbjTb1.js",
+      "_AdminLayout-Cbc8kqIS.js"
+    ],
+    "dynamicImports": [
+      "node_modules/html2canvas/dist/html2canvas.js",
+      "node_modules/dompurify/dist/purify.es.mjs",
+      "node_modules/canvg/lib/index.es.js"
+    ]
+  }
+}
