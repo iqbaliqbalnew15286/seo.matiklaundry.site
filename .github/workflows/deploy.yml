@@ -9,6 +9,7 @@ jobs:
   web-deploy:
     name: Build & Deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Get latest code
         uses: actions/checkout@v4
@@ -41,12 +42,14 @@ jobs:
 
       - name: Prepare deployment archive
         run: |
-          # Generate one-time random deploy token
           DEPLOY_TOKEN=$(openssl rand -hex 32)
           echo "$DEPLOY_TOKEN" > .deploy_token
           echo "DEPLOY_TOKEN=$DEPLOY_TOKEN" >> $GITHUB_ENV
 
-          # Create single ZIP archive (includes vendor/ for Laravel to work)
+          # Remove unnecessary files from vendor to reduce zip size
+          find vendor -type d -name "tests" -o -name "Tests" -o -name "test" -o -name "docs" -o -name "doc" -o -name "examples" -o -name "example" | xargs rm -rf 2>/dev/null || true
+          find vendor -name "*.md" -o -name "CHANGELOG*" -o -name "LICENSE*" -o -name "CONTRIBUTING*" -o -name ".travis.yml" -o -name ".editorconfig" | xargs rm -f 2>/dev/null || true
+
           zip -qr /tmp/deploy.zip . \
             -x ".git/*" \
             -x ".github/*" \
@@ -71,39 +74,63 @@ jobs:
             -x ".npmrc" \
             -x "README.md"
 
-          echo "✅ Archive size: $(du -sh /tmp/deploy.zip | cut -f1)"
+          ZIP_SIZE=$(du -sh /tmp/deploy.zip | cut -f1)
+          echo "✅ Archive size: $ZIP_SIZE"
 
-      - name: Upload archive via FTP
+      - name: Upload via FTP (curl)
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USER: ${{ secrets.FTP_USERNAME }}
+          FTP_PASS: ${{ secrets.FTP_PASSWORD }}
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq lftp > /dev/null 2>&1
-          echo "📤 Uploading deploy.zip + extractor script..."
-          lftp -c "
-            open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} ${{ secrets.FTP_SERVER }};
-            set ftp:ssl-allow yes;
-            set ftp:ssl-force no;
-            set ssl:verify-certificate no;
-            set ftp:passive-mode yes;
-            set net:timeout 120;
-            set net:max-retries 3;
-            mkdir -pf public_html/seo/public;
-            put public/_deploy.php -o public_html/seo/public/_deploy.php;
-            put .deploy_token -o public_html/seo/.deploy_token;
-            put /tmp/deploy.zip -o public_html/seo/deploy.zip;
-            bye
-          "
-          echo "✅ Upload complete"
+          # Setup .netrc for secure FTP auth
+          echo "machine ${FTP_SERVER} login ${FTP_USER} password ${FTP_PASS}" > ~/.netrc
+          chmod 600 ~/.netrc
+
+          FTP_URL="ftp://${FTP_SERVER}/public_html/seo"
+
+          echo "📤 [1/3] Uploading extractor script..."
+          curl --netrc --ftp-pasv --ftp-create-dirs --insecure \
+            -T public/_deploy.php "${FTP_URL}/public/_deploy.php" \
+            --connect-timeout 30 --max-time 60 --retry 3 --retry-delay 5 -s
+          echo "   ✓ Done"
+
+          echo "📤 [2/3] Uploading deploy token..."
+          curl --netrc --ftp-pasv --insecure \
+            -T .deploy_token "${FTP_URL}/.deploy_token" \
+            --connect-timeout 30 --max-time 60 --retry 3 --retry-delay 5 -s
+          echo "   ✓ Done"
+
+          echo "📤 [3/3] Uploading deploy.zip..."
+          curl --netrc --ftp-pasv --insecure \
+            -T /tmp/deploy.zip "${FTP_URL}/deploy.zip" \
+            --connect-timeout 30 --max-time 600 --retry 3 --retry-delay 10 \
+            --speed-limit 1024 --speed-time 30 \
+            --progress-bar
+          echo "   ✓ Done"
+
+          rm -f ~/.netrc
 
       - name: Extract archive on server
         run: |
-          echo "📦 Triggering extraction on server..."
-          RESPONSE=$(curl -sS -f -X POST \
+          echo "📦 Extracting on server..."
+          HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST \
             "https://seo.matiklaundry.site/_deploy.php" \
             -d "token=${{ env.DEPLOY_TOKEN }}" \
-            --max-time 120 2>&1) || {
+            --max-time 120 --retry 2 --retry-delay 5 --insecure) || {
             echo "⚠️ HTTPS failed, trying HTTP..."
-            RESPONSE=$(curl -sS -f -X POST \
+            HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST \
               "http://seo.matiklaundry.site/_deploy.php" \
               -d "token=${{ env.DEPLOY_TOKEN }}" \
-              --max-time 120 2>&1)
+              --max-time 120 --retry 2 --retry-delay 5)
           }
-          echo "✅ Server response: $RESPONSE"
+
+          RESPONSE=$(cat /tmp/response.txt)
+          echo "Server response (HTTP $HTTP_CODE): $RESPONSE"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Deploy successful!"
+          else
+            echo "❌ Deploy failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
