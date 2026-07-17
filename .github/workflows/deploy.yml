@@ -43,17 +43,18 @@ jobs:
             set mirror:parallel-transfer-count 10;
             set mirror:parallel-directories yes;
             set net:timeout 60;
-            mirror -R --parallel=10 --only-newer --no-perms --verbose \
-              --exclude-glob .git* \
-              --exclude-glob .github* \
-              --exclude-glob node_modules \
-              --exclude-glob vendor \
-              --exclude-glob .env* \
-              --exclude-glob tests \
-              --exclude-glob storage/logs \
-              --exclude-glob storage/framework/cache \
-              --exclude-glob storage/framework/sessions \
-              --exclude-glob storage/framework/views \
-              . public_html/seo/;
+            mirror -R \
+              -x ^vendor/ \
+              -x ^node_modules/ \
+              -x ^\.git/ \
+              -x ^\.github/ \
+              -x ^\.env \
+              -x ^\.env\.example \
+              -x ^tests/ \
+              -x ^storage/logs/ \
+              -x ^storage/framework/cache/ \
+              -x ^storage/framework/sessions/ \
+              -x ^storage/framework/views/ \
+              --only-newer --no-perms --parallel=10 --verbose . public_html/seo/;
             bye
           "
