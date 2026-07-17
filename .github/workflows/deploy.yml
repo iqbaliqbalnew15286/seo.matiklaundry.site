@@ -37,8 +37,10 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          # Path ini diarahkan ke folder seo sesuai screenshot kamu
+          # Path diarahkan ke folder seo sesuai struktur di Hostinger
           server-dir: public_html/seo/
+          # Mengatasi masalah Timeout (control socket)
+          force-passive: true 
           exclude: |
             **/.git*
             **/.git*/**
