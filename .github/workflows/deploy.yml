@@ -3,64 +3,82 @@ name: Deploy Laravel React to Hostinger
 on:
   push:
     branches:
-      - main 
+      - main
 
 jobs:
   web-deploy:
-    name: Deploy
+    name: Build & Deploy
     runs-on: ubuntu-latest
     steps:
       - name: Get latest code
         uses: actions/checkout@v4
-      
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3' 
+          php-version: '8.3'
+
+      # Cache Composer agar tidak install ulang setiap deploy
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
 
       - name: Install Composer Dependencies
-        run: composer install --no-dev --optimize-autoloader
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: 'npm'
 
       - name: Install NPM and Build React
         run: |
           npm ci
           npm run build
 
-      - name: Sync files to Hostinger via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: public_html/seo/
-          force-passive: true
-          timeout: 300000
-          exclude: |
-            **/.git*
-            **/.git*/**
-            .github/**
-            **/node_modules/**
-            resources/js/**
-            resources/css/**
-            tests/**
-            storage/logs/**
-            storage/framework/cache/data/**
-            storage/framework/sessions/**
-            storage/framework/views/**
-            .env
-            .env.example
-            readme.md
-            README.md
-            phpunit.xml
-            vite.config.js
-            tailwind.config.js
-            postcss.config.js
-            package.json
-            package-lock.json
-            .editorconfig
-            .gitattributes
+      # LFTP Mirror dengan 10 koneksi paralel (10x lebih cepat dari FTP biasa)
+      - name: Deploy via LFTP (Parallel FTP)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq lftp > /dev/null 2>&1
+          lftp -c "
+            open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} ${{ secrets.FTP_SERVER }};
+            set ftp:ssl-allow yes;
+            set ftp:ssl-force no;
+            set ssl:verify-certificate no;
+            set ftp:passive-mode yes;
+            set mirror:parallel-transfer-count 10;
+            set mirror:parallel-directories yes;
+            set net:timeout 60;
+            set net:max-retries 5;
+            set net:reconnect-interval-base 5;
+            mirror -R --parallel=10 --only-newer --no-perms --verbose \
+              --exclude ^\.git/ \
+              --exclude ^\.github/ \
+              --exclude ^node_modules/ \
+              --exclude ^resources/js/ \
+              --exclude ^resources/css/ \
+              --exclude ^tests/ \
+              --exclude ^storage/logs/ \
+              --exclude ^storage/framework/cache/ \
+              --exclude ^storage/framework/sessions/ \
+              --exclude ^storage/framework/views/ \
+              --exclude ^\.env$ \
+              --exclude ^\.env\.example$ \
+              --exclude ^\.editorconfig$ \
+              --exclude ^\.gitattributes$ \
+              --exclude ^\.gitignore$ \
+              --exclude ^phpunit\.xml$ \
+              --exclude ^vite\.config\.js$ \
+              --exclude ^tailwind\.config\.js$ \
+              --exclude ^postcss\.config\.js$ \
+              --exclude ^package\.json$ \
+              --exclude ^package-lock\.json$ \
+              --exclude ^readme\.md$ \
+              --exclude ^README\.md$ \
+              . public_html/seo/;
+            bye
+          "
