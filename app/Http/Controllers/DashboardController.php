@@ -32,12 +32,14 @@ class DashboardController extends Controller
     {
         $request->validate([
             'competitor_name' => 'required|string|max:255',
+            'competitor_category' => 'nullable|string|max:255',
             'headers' => 'required|array',
             'rows' => 'required|array'
         ]);
 
         $competitor = Competitor::create([
             'name' => $request->input('competitor_name'),
+            'category' => $request->input('competitor_category'),
         ]);
 
         $headers = $request->input('headers');
@@ -115,11 +117,62 @@ class DashboardController extends Controller
             'relevance_value', 
             'priority', 
             'tags', 
-            'notes'
+            'notes',
+            'content_brief'
         ]));
 
         // PERBAIKAN: Menggunakan redirect()->back() agar sesuai dengan standar response Inertia.js
         // Frontend (React) sudah menangani UI state dan notifikasinya, sehingga cukup kembalikan respons ini.
+        return redirect()->back();
+    }
+
+    // Mengubah detail kompetitor (nama dan kategori)
+    public function updateCompetitor(Request $request, $id)
+    {
+        $competitor = Competitor::findOrFail($id);
+        
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'category' => 'nullable|string|max:255',
+        ]);
+
+        $competitor->update($request->only(['name', 'category']));
+
+        return redirect()->back();
+    }
+
+    // Menghapus satu kompetitor (cascade keywords)
+    public function destroyCompetitor($id)
+    {
+        $competitor = Competitor::findOrFail($id);
+        $competitor->delete();
+
+        return redirect()->back();
+    }
+
+    // Menghapus beberapa kompetitor sekaligus
+    public function bulkDeleteCompetitors(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:competitors,id'
+        ]);
+
+        Competitor::whereIn('id', $request->input('ids'))->delete();
+
+        return redirect()->back();
+    }
+
+    // Menghapus beberapa keyword sekaligus
+    public function bulkDeleteKeywords(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:keywords,id'
+        ]);
+
+        Keyword::whereIn('id', $request->input('ids'))->delete();
+
         return redirect()->back();
     }
 }

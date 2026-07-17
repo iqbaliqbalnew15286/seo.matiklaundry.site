@@ -12,8 +12,10 @@ export default function Login() {
 
     // Menangkap pesan error dari backend secara reaktif
     useEffect(() => {
+        // Jika ada error apapun dari backend, tampilkan pesan generik
         if (errors.email || errors.password) {
-            setToastError(errors.email || errors.password);
+            setToastError('Email dan password salah.');
+
             const timer = setTimeout(() => {
                 setToastError(null);
                 clearErrors();
@@ -24,8 +26,7 @@ export default function Login() {
 
     const submit = (e) => {
         e.preventDefault();
-        setToastError(null);
-        // post akan otomatis memicu update ke prop 'errors' jika gagal
+        setToastError(null); // Bersihkan error lama saat submit baru
         post('/login');
     };
 
@@ -42,9 +43,13 @@ export default function Login() {
 
                 {/* TOAST ERROR NOTIFICATION */}
                 {toastError && (
-                    <div className="fixed top-6 left-1/2 transform -translate-x-1/2 bg-rose-600/95 backdrop-blur-md text-white px-5 py-3.5 rounded-full shadow-[0_10px_40px_rgba(225,29,72,0.3)] z-[9999] flex items-center gap-3 animate-in slide-in-from-top-5 fade-in duration-300 border border-rose-500 transition-all">
-                        <span className="flex items-center justify-center w-5 h-5 bg-white rounded-full text-rose-600 text-xs font-bold shadow-sm">!</span>
-                        <span className="text-sm font-semibold tracking-wide">{toastError}</span>
+                    <div className="fixed top-6 left-1/2 transform -translate-x-1/2 bg-rose-500/95 backdrop-blur-md text-white px-5 py-3.5 rounded-2xl shadow-[0_20px_50px_rgba(244,63,94,0.25)] z-[9999] flex items-center gap-3 animate-in slide-in-from-top-5 fade-in duration-300 border border-rose-400/20 transition-all">
+                        <div className="flex items-center justify-center w-5 h-5 bg-white/10 rounded-lg text-white">
+                            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                            </svg>
+                        </div>
+                        <span className="text-xs font-extrabold tracking-wide">{toastError}</span>
                     </div>
                 )}
 
@@ -85,7 +90,7 @@ export default function Login() {
                                 name="email"
                                 value={data.email}
                                 onChange={(e) => setData('email', e.target.value)}
-                                className={`w-full px-5 py-3.5 text-sm font-semibold text-slate-800 bg-slate-50/50 border rounded-2xl outline-none transition-all duration-300 focus:bg-white focus:ring-4 placeholder-slate-400 ${errors.email ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/10' : 'border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/10'}`}
+                                className="w-full px-5 py-3.5 text-sm font-semibold text-slate-800 bg-slate-50/50 border border-slate-200 rounded-2xl outline-none transition-all duration-300 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 placeholder-slate-400 hover:border-slate-300"
                                 placeholder="name@company.com"
                             />
                         </div>
@@ -101,7 +106,7 @@ export default function Login() {
                                     name="password"
                                     value={data.password}
                                     onChange={(e) => setData('password', e.target.value)}
-                                    className={`w-full pl-5 pr-12 py-3.5 text-sm font-semibold text-slate-800 bg-slate-50/50 border rounded-2xl outline-none transition-all duration-300 focus:bg-white focus:ring-4 placeholder-slate-400 tracking-wide ${errors.password ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/10' : 'border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-blue-500/10'}`}
+                                    className="w-full pl-5 pr-12 py-3.5 text-sm font-semibold text-slate-800 bg-slate-50/50 border border-slate-200 rounded-2xl outline-none transition-all duration-300 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 placeholder-slate-400 hover:border-slate-300 tracking-wide"
                                     placeholder="••••••••"
                                 />
                                 <button

@@ -16,23 +16,23 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        // Validasi input
+        // Validasi input form
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required'],
         ]);
 
-        // Coba melakukan login
+        // Coba melakukan login langsung
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
             
             return redirect()->intended('dashboard');
         }
 
-        // Jika gagal, kembalikan ke halaman sebelumnya dengan pesan error
+        // Jika kombinasi salah (entah email atau password), kembalikan pesan generik
         return back()->withErrors([
-            'email' => 'Email atau Password yang Anda masukkan salah.',
-        ]);
+            'email' => 'Email dan password salah.',
+        ])->onlyInput('email');
     }
 
     public function logout(Request $request)

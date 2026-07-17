@@ -24,11 +24,29 @@ export default function Analysis({ competitor, keywords }) {
 
     // State untuk form edit Sidebar (Lokal)
     const [editingNotes, setEditingNotes] = useState('');
+    const [editingContentBrief, setEditingContentBrief] = useState('');
     const [editingTags, setEditingTags] = useState([]);
+
+    // States untuk Paginasi & Bulk Action Toggle
+    const [isBulkActionActive, setIsBulkActionActive] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+
+    // Reset halaman saat filter berubah
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, sortConfig]);
+
+    // Bersihkan pilihan saat bulk action dimatikan
+    useEffect(() => {
+        if (!isBulkActionActive) setSelectedIds([]);
+    }, [isBulkActionActive]);
 
     useEffect(() => {
         if (selectedKeyword) {
             setEditingNotes(selectedKeyword.meta?.notes || '');
+            setEditingContentBrief(selectedKeyword.meta?.content_brief || '');
             setEditingTags(selectedKeyword.meta?.tags || []);
             setNewTagInput('');
         }
@@ -59,17 +77,35 @@ export default function Analysis({ competitor, keywords }) {
             [selectedKeyword.id]: { 
                 ...selectedKeyword.meta, 
                 notes: editingNotes, 
+                content_brief: editingContentBrief,
                 tags: finalTags 
             } 
         }));
         saveToServer(selectedKeyword.id, { 
             notes: editingNotes, 
+            content_brief: editingContentBrief,
             tags: finalTags 
         });
 
         // Tutup panel setelah simpan
         setSelectedKeyword(null);
         setNewTagInput('');
+    };
+
+    const executeBulkDeleteKeywords = () => {
+        router.post('/keywords/bulk-delete', {
+            ids: selectedIds
+        }, {
+            onSuccess: () => {
+                setSelectedIds([]);
+                setIsBulkDeleteModalOpen(false);
+                showToast("Keyword terpilih berhasil dihapus.");
+            },
+            onError: () => {
+                setIsBulkDeleteModalOpen(false);
+                showToast("Gagal menghapus keyword.");
+            }
+        });
     };
 
     // Kunci scroll body saat fullscreen atau panel terbuka
@@ -156,7 +192,7 @@ export default function Analysis({ competitor, keywords }) {
 
             // Gunakan customRelevance jika diubah di sesi ini, jika tidak gunakan sinkronisasi auto
             const relScore = customRelevance[kw.id] !== undefined ? customRelevance[kw.id] : autoRel;
-            const meta = keywordMeta[kw.id] || { tags: kw.tags || [], notes: kw.notes || '', priority: kw.priority || '' };
+            const meta = keywordMeta[kw.id] || { tags: kw.tags || [], notes: kw.notes || '', content_brief: kw.content_brief || '', priority: kw.priority || '' };
             const score = calculateScore(kw, relScore);
             return {
                 ...kw,
@@ -223,6 +259,11 @@ export default function Analysis({ competitor, keywords }) {
         }
         return result;
     }, [keywordsWithScore, sortConfig, searchQuery]);
+
+    const paginatedKeywords = useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize;
+        return filteredAndSortedKeywords.slice(startIndex, startIndex + pageSize);
+    }, [filteredAndSortedKeywords, currentPage, pageSize]);
 
     const requestSort = (key) => {
         let direction = 'asc';
@@ -298,7 +339,8 @@ export default function Analysis({ competitor, keywords }) {
             'Score': kw.opportunity_score.toString(),
             'Tags': kw.meta?.tags?.join(', ') || '-',
             'Priority': kw.meta.priority || '-',
-            'Notes': kw.meta.notes || '-'
+            'Catatan': kw.meta.notes || '-',
+            'Brief Konten': kw.meta.content_brief || '-'
         }));
 
         const wb = XLSX.utils.book_new();
@@ -318,7 +360,7 @@ export default function Analysis({ competitor, keywords }) {
         doc.setFontSize(10);
         doc.text(`Total diekspor: ${dataToExport.length} keyword`, 40, 60);
 
-        const tableColumn = ["Keyword", "Relevansi", "Volume", "3M Change", "YoY", "Kompetisi", "Idx Val", "Bid L/H", "Ad Impr", "Score", "Tags", "Priority", "Notes"];
+        const tableColumn = ["Keyword", "Relevansi", "Volume", "3M Change", "YoY", "Kompetisi", "Idx Val", "Bid L/H", "Ad Impr", "Score", "Tags", "Priority", "Catatan", "Brief Konten"];
         const tableRows = dataToExport.map(kw => [
             kw.keyword,
             kw.relevance_value.toString(),
@@ -332,7 +374,8 @@ export default function Analysis({ competitor, keywords }) {
             kw.opportunity_score.toString(),
             kw.meta?.tags?.join(', ') || '-',
             kw.meta.priority || '-',
-            kw.meta.notes || '-'
+            kw.meta.notes || '-',
+            kw.meta.content_brief || '-'
         ]);
 
         autoTable(doc, {
@@ -391,6 +434,20 @@ export default function Analysis({ competitor, keywords }) {
                     </div>
 
                     <button 
+                        onClick={() => setIsBulkActionActive(!isBulkActionActive)} 
+                        className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-full text-sm font-bold transition-all duration-300 shadow-sm border active:scale-95 ${
+                            isBulkActionActive 
+                                ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/20' 
+                                : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200/60'
+                        }`}
+                    >
+                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+                        </svg>
+                        Bulk Action {isBulkActionActive ? '(Aktif)' : ''}
+                    </button>
+
+                    <button 
                         onClick={() => setIsFullscreen(!isFullscreen)} 
                         className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-white text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-full text-sm font-bold transition-all duration-300 shadow-sm border border-slate-200/60 active:scale-95"
                     >
@@ -447,9 +504,11 @@ export default function Analysis({ competitor, keywords }) {
                     <table className="w-full text-left border-collapse whitespace-nowrap">
                         <thead className="bg-slate-50/80 backdrop-blur-md sticky top-0 z-20 shadow-sm">
                             <tr>
-                                <th className="px-4 py-4 text-center w-14 bg-slate-50/80 backdrop-blur-md">
-                                    <input type="checkbox" className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer transition-all" checked={selectedIds.length === filteredAndSortedKeywords.length && filteredAndSortedKeywords.length > 0} onChange={handleSelectAll} />
-                                </th>
+                                {isBulkActionActive && (
+                                    <th className="px-4 py-4 text-center w-14 bg-slate-50/80 backdrop-blur-md">
+                                        <input type="checkbox" className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer transition-all" checked={selectedIds.length === filteredAndSortedKeywords.length && filteredAndSortedKeywords.length > 0} onChange={handleSelectAll} />
+                                    </th>
+                                )}
                                 <th className="px-4 py-4 text-[11px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/80 backdrop-blur-md cursor-pointer hover:text-blue-600 group transition-colors" onClick={() => requestSort('keyword')}>
                                     Keyword <SortIcon columnKey="keyword" />
                                 </th>
@@ -483,14 +542,19 @@ export default function Analysis({ competitor, keywords }) {
                                 <th className="px-4 py-4 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                                     Catatan
                                 </th>
+                                <th className="px-4 py-4 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                    Brief Konten
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                            {filteredAndSortedKeywords.length > 0 ? filteredAndSortedKeywords.map((kw) => (
+                            {paginatedKeywords.length > 0 ? paginatedKeywords.map((kw) => (
                                 <tr key={kw.id} className={`group transition-colors duration-200 ${selectedIds.includes(kw.id) ? 'bg-blue-50/60' : 'bg-white hover:bg-slate-50/60'}`}>
-                                    <td className={`px-4 py-3 text-center transition-colors duration-200 ${selectedIds.includes(kw.id) ? 'bg-blue-50' : 'bg-white group-hover:bg-slate-50/60'}`}>
-                                        <input type="checkbox" className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer" checked={selectedIds.includes(kw.id)} onChange={(e) => handleSelectOne(e, kw.id)} />
-                                    </td>
+                                    {isBulkActionActive && (
+                                        <td className={`px-4 py-3 text-center transition-colors duration-200 ${selectedIds.includes(kw.id) ? 'bg-blue-50' : 'bg-white group-hover:bg-slate-50/60'}`}>
+                                            <input type="checkbox" className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer" checked={selectedIds.includes(kw.id)} onChange={(e) => handleSelectOne(e, kw.id)} />
+                                        </td>
+                                    )}
                                     <td 
                                         className={`px-4 py-3 cursor-pointer transition-colors duration-200 ${selectedIds.includes(kw.id) ? 'bg-blue-50' : 'bg-white group-hover:bg-slate-50/60'}`}
                                         onClick={() => setSelectedKeyword(kw)}
@@ -558,13 +622,24 @@ export default function Analysis({ competitor, keywords }) {
                                     <td className="px-4 py-3 text-sm font-medium text-slate-600">
                                         {kw.ad_impression_share || '-'}
                                     </td>
-                                    <td className="px-4 py-3 text-xs font-medium text-slate-500 max-w-[150px] truncate" title={kw.meta.notes}>
-                                        {kw.meta.notes || <span className="italic text-slate-300">Kosong</span>}
+                                    <td className="px-4 py-3 text-xs font-medium text-slate-500 max-w-[180px]" title={kw.meta.notes || ''}>
+                                        {kw.meta.notes ? (
+                                            <span className="text-slate-600 block truncate">{kw.meta.notes}</span>
+                                        ) : (
+                                            <span className="italic text-slate-300 block">-</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-xs font-medium text-slate-500 max-w-[180px]" title={kw.meta.content_brief || ''}>
+                                        {kw.meta.content_brief ? (
+                                            <span className="text-slate-600 block truncate">{kw.meta.content_brief}</span>
+                                        ) : (
+                                            <span className="italic text-slate-300 block">-</span>
+                                        )}
                                     </td>
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan="12" className="px-5 py-24 text-center">
+                                    <td colSpan={isBulkActionActive ? 13 : 12} className="px-5 py-24 text-center">
                                         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-50 mb-3">
                                             <svg className="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                         </div>
@@ -575,16 +650,44 @@ export default function Analysis({ competitor, keywords }) {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Kontrol Paginasi */}
+                {filteredAndSortedKeywords.length > pageSize && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 bg-slate-50 border-t border-slate-100 rounded-b-3xl shrink-0">
+                        <span className="text-xs font-semibold text-slate-500">
+                            Menampilkan {Math.min((currentPage - 1) * pageSize + 1, filteredAndSortedKeywords.length)}-{Math.min(currentPage * pageSize, filteredAndSortedKeywords.length)} dari {filteredAndSortedKeywords.length} keyword
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                disabled={currentPage === 1}
+                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-100 hover:text-slate-800 transition-colors"
+                            >
+                                Previous
+                            </button>
+                            <span className="text-xs font-extrabold text-slate-700 px-2">
+                                Halaman {currentPage} dari {Math.ceil(filteredAndSortedKeywords.length / pageSize)}
+                            </span>
+                            <button
+                                disabled={currentPage >= Math.ceil(filteredAndSortedKeywords.length / pageSize)}
+                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(filteredAndSortedKeywords.length / pageSize)))}
+                                className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-100 hover:text-slate-800 transition-colors"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* FLOATING BULK ACTION BAR (Mulus & Glassmorphism) */}
-            {selectedIds.length > 0 && (
-                <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 shadow-[0_20px_50px_rgba(0,0,0,0.3)] rounded-full px-6 py-3.5 flex items-center gap-5 z-[9999] animate-in slide-in-from-bottom-8 fade-in duration-300 ease-out">
-                    <div className="text-white flex items-center">
-                        <span className="flex items-center justify-center w-7 h-7 bg-blue-500 rounded-full font-black text-sm shadow-inner mr-2.5">{selectedIds.length}</span>
-                        <span className="text-sm font-semibold text-slate-300">Data Terpilih</span>
+            {isBulkActionActive && selectedIds.length > 0 && (
+                <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-950/95 backdrop-blur-xl border border-slate-800 shadow-[0_25px_60px_rgba(0,0,0,0.5)] rounded-2xl px-5 py-3.5 flex items-center gap-4.5 z-[9999] animate-in slide-in-from-bottom-8 fade-in duration-300 ease-out">
+                    <div className="text-white flex items-center gap-2.5">
+                        <span className="flex items-center justify-center w-6 h-6 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-full font-black text-[11px] shadow-md shadow-blue-500/10">{selectedIds.length}</span>
+                        <span className="text-xs font-bold tracking-wide text-slate-200">Data Terpilih</span>
                     </div>
-                    <div className="w-px h-6 bg-slate-700"></div>
+                    <div className="w-px h-4.5 bg-slate-800"></div>
                     
                     <div className="flex items-center gap-3 relative">
                         <select 
@@ -594,18 +697,25 @@ export default function Analysis({ competitor, keywords }) {
                                     e.target.value = ""; 
                                 }
                             }}
-                            className="bg-slate-800/80 text-slate-200 text-sm font-semibold rounded-full px-5 py-2 outline-none border border-slate-700 hover:bg-slate-700 hover:text-white cursor-pointer appearance-none transition-all"
+                            className="bg-slate-900 border border-slate-800 text-slate-300 text-xs font-bold rounded-xl px-3.5 py-1.5 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 cursor-pointer transition-all outline-none"
                         >
-                            <option value="">⚙ Set Prioritas...</option>
+                            <option value="">Set Prioritas...</option>
                             <option value="High">Tinggi (High)</option>
-                            <option value="Medium">Menengah (Medium)</option>
+                            <option value="Medium">Sedang (Medium)</option>
                             <option value="Low">Rendah (Low)</option>
                         </select>
+                        
+                        <button 
+                            onClick={() => setIsBulkDeleteModalOpen(true)}
+                            className="bg-rose-600 hover:bg-rose-500 text-white px-4.5 py-1.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 active:scale-95 shadow-md shadow-rose-500/20"
+                        >
+                            Hapus Terpilih
+                        </button>
                         
                         <div ref={dropdownRef} className="relative">
                             <button 
                                 onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-5 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-2 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 active:scale-95"
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 active:scale-95"
                             >
                                 Export
                                 <svg className={`w-4 h-4 transition-transform duration-300 ${isExportMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7" /></svg>
@@ -623,8 +733,12 @@ export default function Analysis({ competitor, keywords }) {
                             )}
                         </div>
 
-                        <button onClick={() => setSelectedIds([])} className="ml-2 w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 rounded-full transition-colors">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                        <button 
+                            onClick={() => setSelectedIds([])} 
+                            className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-xl transition-all"
+                            title="Batalkan Pilihan"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                     </div>
                 </div>
@@ -645,9 +759,13 @@ export default function Analysis({ competitor, keywords }) {
             </style>
 
             {toastMessage && (
-                <div className="fixed top-6 left-1/2 transform -translate-x-1/2 bg-slate-800/90 backdrop-blur-md text-white px-5 py-3.5 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.2)] z-[9999] flex items-center gap-3 animate-in slide-in-from-top-5 fade-in duration-300 border border-slate-700/50">
-                    <span className="flex items-center justify-center w-5 h-5 bg-emerald-500 rounded-full text-white text-xs font-bold shadow-sm">✓</span>
-                    <span className="text-sm font-semibold tracking-wide">{toastMessage}</span>
+                <div className="fixed top-6 left-1/2 transform -translate-x-1/2 bg-slate-900/95 backdrop-blur-xl border border-slate-800 text-white px-5 py-3.5 rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.4)] z-[9999] flex items-center gap-3 animate-in slide-in-from-top-5 fade-in duration-300 transition-all">
+                    <div className="flex items-center justify-center w-5 h-5 bg-emerald-500/10 rounded-lg text-emerald-400 border border-emerald-500/20">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                    </div>
+                    <span className="text-xs font-extrabold tracking-wide">{toastMessage}</span>
                 </div>
             )}
 
@@ -730,17 +848,34 @@ export default function Analysis({ competitor, keywords }) {
                                 </div>
                             </div>
 
+                            {/* Catatan Internal */}
                             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative group">
                                 <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
                                     <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                    Catatan & Brief Konten
+                                    Catatan Internal
                                 </h4>
                                 <div className="relative">
                                     <textarea 
-                                        className="w-full bg-white border border-slate-300 rounded-xl p-4 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 resize-none h-40 transition-all shadow-sm hover:border-slate-400 custom-scrollbar"
-                                        placeholder="Tuliskan ide konten, intent pengguna, atau instruksi untuk tim penulis disini..."
+                                        className="w-full bg-white border border-slate-300 rounded-xl p-4 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 resize-none h-28 transition-all shadow-sm hover:border-slate-400 custom-scrollbar"
+                                        placeholder="Tuliskan catatan internal di sini..."
                                         value={editingNotes}
                                         onChange={(e) => setEditingNotes(e.target.value)}
+                                    ></textarea>
+                                </div>
+                            </div>
+
+                            {/* Brief Konten */}
+                            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative group mt-4">
+                                <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                    Brief Konten (Instruksi Penulis)
+                                </h4>
+                                <div className="relative">
+                                    <textarea 
+                                        className="w-full bg-white border border-slate-300 rounded-xl p-4 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 resize-none h-36 transition-all shadow-sm hover:border-slate-400 custom-scrollbar"
+                                        placeholder="Tuliskan instruksi penulisan artikel, ide konten, atau keyword LSI di sini..."
+                                        value={editingContentBrief}
+                                        onChange={(e) => setEditingContentBrief(e.target.value)}
                                     ></textarea>
                                 </div>
                             </div>
@@ -754,6 +889,30 @@ export default function Analysis({ competitor, keywords }) {
                             >
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
                                 Simpan Perubahan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* CUSTOM BULK DELETE KEYWORDS CONFIRMATION MODAL */}
+            {isBulkDeleteModalOpen && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsBulkDeleteModalOpen(false)}></div>
+                    <div className="relative bg-white rounded-3xl border border-slate-100 shadow-2xl w-full max-w-sm p-6 sm:p-8 animate-in zoom-in-95 duration-200 z-10 text-center">
+                        <div className="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-rose-50 text-rose-600 mb-5">
+                            <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">Hapus Keyword Terpilih?</h3>
+                        <p className="text-sm text-slate-500 mb-6">Apakah Anda yakin ingin menghapus <strong>{selectedIds.length}</strong> keyword terpilih secara permanen?</p>
+                        <div className="flex gap-3 justify-center">
+                            <button onClick={() => setIsBulkDeleteModalOpen(false)} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold rounded-xl transition-all">
+                                Batal
+                            </button>
+                            <button onClick={executeBulkDeleteKeywords} className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold rounded-xl transition-all shadow-md shadow-rose-500/20 active:scale-95">
+                                Ya, Hapus
                             </button>
                         </div>
                     </div>

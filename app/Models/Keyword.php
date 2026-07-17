@@ -15,7 +15,7 @@ class Keyword extends Model
         'bid_low_range', 'bid_high_range', 'ad_impression_share',
         'organic_impression_share', 'organic_average_position',
         'in_account', 'in_plan', 'monthly_trends', 'is_selected', 
-        'priority', 'tags', 'relevance_value', 'notes' // Penambahan kolom meta
+        'priority', 'tags', 'relevance_value', 'notes', 'content_brief' // Penambahan kolom meta
     ];
 
     protected $casts = [
