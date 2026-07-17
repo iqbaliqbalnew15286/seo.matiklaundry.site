@@ -28,8 +28,9 @@ jobs:
 
       - name: Install NPM and Build React
         run: |
-          npm install
+          npm ci            # Gunakan 'npm ci' agar lebih stabil untuk CI/CD
           npm run build
+        # Ini akan memastikan build benar-benar selesai
 
       - name: Sync files to Hostinger via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
@@ -37,10 +38,9 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          # Path diarahkan ke folder seo sesuai struktur di Hostinger
           server-dir: public_html/seo/
-          # Mengatasi masalah Timeout (control socket)
-          force-passive: true 
+          force-passive: true
+          timeout: 300000 # Tambahkan timeout 5 menit agar tidak gantung selamanya
           exclude: |
             **/.git*
             **/.git*/**
